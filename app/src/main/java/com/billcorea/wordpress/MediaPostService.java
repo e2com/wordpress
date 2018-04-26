@@ -9,6 +9,8 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.media.ExifInterface;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
@@ -22,22 +24,33 @@ import android.support.annotation.NonNull;
 import android.text.TextUtils;
 import android.util.Log;
 import android.webkit.MimeTypeMap;
-import android.widget.ArrayAdapter;
 
+import com.android.volley.AuthFailureError;
 import com.android.volley.DefaultRetryPolicy;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
 import com.android.volley.Response;
+import com.android.volley.RetryPolicy;
 import com.android.volley.VolleyError;
+import com.android.volley.VolleyLog;
 import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.IOException;
+import java.io.FileInputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 
 public class MediaPostService extends Service {
 
@@ -45,10 +58,13 @@ public class MediaPostService extends Service {
     File file = null ;
 
     private static final int MILLISINFUTURE = 1000*1000;
-    private static final int COUNT_DOWN_INTERVAL = 30000;
+    private static final int COUNT_DOWN_INTERVAL = 1000 * 300; // 180 초 = 3분에 1번씩
 
     private CountDownTimer countDownTimer;
     ArrayList<String> fileList = null ;
+    int maxCnt = 0 ;
+    int rowCnt = 0 ;
+    int errCnt = 0 ;
 
     Gson gson;
     List<Object> list;
@@ -58,7 +74,6 @@ public class MediaPostService extends Service {
     String postTitle[];
     RequestQueue rQueue ;
     StringRequest request ;
-    String getMediaSearchUrl = "" ;
 
     public MediaPostService() {
     }
@@ -92,7 +107,7 @@ public class MediaPostService extends Service {
 
         notification = new Notification.Builder(getApplicationContext())
                 .setSmallIcon(R.drawable.ic_notifycation)
-                .setContentTitle("MediaPostService")
+                .setContentTitle("워드프레스!!!")
                 .setContentText("Catch me if you can !!!")
                 .build();
 
@@ -120,34 +135,10 @@ public class MediaPostService extends Service {
      */
     private void initData(){
 
+        maxCnt = 0 ;
         fileList = getPathOfAllImages() ;
         countDownTimer();
         countDownTimer.start();
-
-        request = new StringRequest(Request.Method.GET, StringUtil.getUrl(), new Response.Listener<String>() {
-            @Override
-            public void onResponse(String s) {
-                gson = new Gson();
-                list = (List) gson.fromJson(s, List.class);
-
-                for(int i=0;i<list.size();++i){
-                    mapPost = (Map<String,Object>)list.get(i);
-                    mapId = (Map<String, Object>) mapPost.get("id");
-                    mapTitle = (Map<String, Object>) mapPost.get("guid");
-                    postTitle[i] = (String) mapTitle.get("rendered");
-                }
-            }
-        }, new Response.ErrorListener() {
-            @Override
-            public void onErrorResponse(VolleyError volleyError) {
-                //Toast.makeText(MainWordPress.this, "Some error occurred", Toast.LENGTH_LONG).show();
-                Log.d(TAG, "Some Error Occurred !!! [" + volleyError.toString() + "]");
-            }
-        });
-
-        request.setRetryPolicy(new DefaultRetryPolicy(10000, DefaultRetryPolicy.DEFAULT_MAX_RETRIES,  DefaultRetryPolicy.DEFAULT_BACKOFF_MULT));
-        rQueue = Volley.newRequestQueue(getBaseContext());
-        rQueue.add(request);
     }
 
     public void countDownTimer(){
@@ -157,12 +148,10 @@ public class MediaPostService extends Service {
 
                 if (getWIFIStatus() && StringUtil.sToken != null) {
                     Log.i(TAG, "onTick [" + StringUtil.sToken + "]");
-                    //String rootPath = "/storage/572B-3465" ;
-                    //getFileList(rootPath) ;
-
-                    for (String string : fileList)
-                    {
-                        Log.i(TAG, "|" + string + "|");
+                    Log.d(TAG, "rowCnt=" + rowCnt + ", maxCnt=" + maxCnt) ;
+                    if(rowCnt < maxCnt) {
+                        Log.d(TAG, "fleName (" + rowCnt + ")=" + fileList.get(rowCnt)) ;
+                        getChkSndImage(fileList.get(rowCnt)) ;
                     }
 
                 } else {
@@ -174,6 +163,158 @@ public class MediaPostService extends Service {
                 Log.i(TAG,"onFinish");
             }
         };
+    }
+
+    public void getChkSndImage(final String imgName) {
+
+        File n = new File(imgName);
+        final String nn = n.getName() ;
+        String nn1 = nn.replaceAll(" ", "_");
+        Log.d(TAG, "Call URL=" + StringUtil.getMediaSearchUrl(nn)) ;
+
+        request = new StringRequest(Request.Method.GET, StringUtil.getMediaSearchUrl(nn1), new Response.Listener<String>() {
+            @Override
+            public void onResponse(String s) {
+                Log.d(TAG, "-----------------------------------------") ;
+                Log.d(TAG, "response=///" + s + "///") ;
+                Log.d(TAG, "-----------------------------------------") ;
+                String strId = "" ;
+                if (s.indexOf("id") < 0) {
+                    Log.d(TAG, "not Found !!!" ) ;
+                    try {
+                        setImagePost(imgName, nn);
+                    } catch (Exception e) {
+
+                    }
+                } else {
+                    Log.d(TAG, "id = " + s.indexOf("id")) ;
+                    rowCnt++; // 다음으로 넘어가기
+                    if (rowCnt >= maxCnt) {
+                        maxCnt = 0 ;
+                        fileList = getPathOfAllImages() ;
+                    }
+                }
+            }
+
+        }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError volleyError) {
+                //Toast.makeText(MainWordPress.this, "Some error occurred", Toast.LENGTH_LONG).show();
+                Log.d(TAG, "Some Error Occurred !!! [" + volleyError.toString() + "]");
+                errCnt++;
+                if (errCnt > 5) {
+                    Log.d(TAG, "errCnt=" + errCnt) ;
+                    countDownTimer.cancel();
+                }
+            }
+        }) ;
+
+        request.setRetryPolicy(new RetryPolicy() {
+            @Override
+            public int getCurrentTimeout() {
+                return COUNT_DOWN_INTERVAL;
+            }
+
+            @Override
+            public int getCurrentRetryCount() {
+                return 5;
+            }
+
+            @Override
+            public void retry(VolleyError error) throws VolleyError {
+                Log.e(TAG, "Some Error Occurred !!! [" + error.toString() + "]");
+                errCnt++;
+                if (errCnt > 5) {
+                    Log.d(TAG, "errCnt=" + errCnt) ;
+                    countDownTimer.cancel();
+                }
+            }
+        });
+        rQueue = Volley.newRequestQueue(getBaseContext());
+        rQueue.add(request);
+    }
+
+    public void setImagePost(String imgFileName, String fName) throws Exception {
+
+        final String imgName = fName.replaceAll(" ", "_") ;
+        File iFile = new File(imgFileName) ;
+        FileInputStream bImage = null ;
+        try {
+            bImage = new FileInputStream(iFile);
+        } catch (Exception e) {
+
+        }
+        Bitmap bm = BitmapFactory.decodeStream(bImage);
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        bm.compress(Bitmap.CompressFormat.JPEG, 100 , baos);
+        byte[] b = baos.toByteArray();
+
+        final StringRequest requestPost = new StringRequest(Request.Method.POST, StringUtil.getMediaUrl(), new Response.Listener<String>() {
+            @Override
+            public void onResponse(String s) {
+                Log.d(TAG, "onResponse(" + s.toString() + ")") ;
+                if (s.indexOf("id") < 0) {
+                    Log.d(TAG, "Media Posting ERROR K !!! ID<<<") ;
+                } else {
+                    Log.d(TAG, "Media Posting OK !!! [" + s.toString() + "]") ;
+                }
+                rowCnt++; // 다음으로 넘어가기
+                if (rowCnt >= maxCnt) {
+                    maxCnt = 0 ;
+                    fileList = getPathOfAllImages() ;
+                }
+            }
+        }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                rowCnt++; // 다음으로 넘어가기
+                if (rowCnt >= maxCnt) {
+                    maxCnt = 0 ;
+                    fileList = getPathOfAllImages() ;
+                }
+                Log.e(TAG, "Some Error Occurred !!! [" + error.toString() + "]");
+            }
+        }) {
+            @Override
+            public byte[] getBody() throws AuthFailureError {
+                Log.d(TAG, "getBody() ++++++++++++++++++++++++++++++++++++") ;
+                return baos.toByteArray();
+            }
+            @Override
+            public Map<String, String> getHeaders() throws AuthFailureError {
+                Map<String, String> params = new HashMap<String, String>();
+                params.put("Content-Disposition","attachment; filename=" + imgName);
+                params.put("Authorization", "Bearer " + StringUtil.sToken);
+                return params;
+            }
+        };
+
+        requestPost.setRetryPolicy(new RetryPolicy() {
+            @Override
+            public int getCurrentTimeout() {
+                return COUNT_DOWN_INTERVAL;
+            }
+
+            @Override
+            public int getCurrentRetryCount() {
+                return 5;
+            }
+
+            @Override
+            public void retry(VolleyError error) throws VolleyError {
+                rowCnt++; // 다음으로 넘어가기
+                if (rowCnt >= maxCnt) {
+                    maxCnt = 0 ;
+                    fileList = getPathOfAllImages() ;
+                }
+                Log.e(TAG, "setRetryPolicy error [" + error.toString() + "]");
+            }
+        });
+
+        rQueue = Volley.newRequestQueue(getBaseContext());
+        VolleyLog.DEBUG = true ;
+        Log.d(TAG, "Media Post request Start -------------------------------------------------------------------------") ;
+        rQueue.add(requestPost);
     }
 
     private ArrayList<String> getPathOfAllImages()
@@ -197,6 +338,7 @@ public class MediaPostService extends Service {
             if (!TextUtils.isEmpty(absolutePathOfImage))
             {
                 result.add(absolutePathOfImage);
+                maxCnt++ ;
             }
         }
 
