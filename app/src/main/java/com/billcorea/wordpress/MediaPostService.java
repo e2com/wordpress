@@ -195,6 +195,18 @@ public class MediaPostService extends Service {
                                 }
                             } else {
                                 rowCnt++; // 전송한 파일 이면 다음으로 넘어가게 하기 위해서.
+                                boolean bTrue = true ;
+                                while(bTrue) {
+                                    File nO = new File(fileList.get(rowCnt));
+                                    String nnO = nO.getName();
+                                    String nn1O = nnO.replaceAll(" ", "_");
+                                    Log.d(TAG, "fleName (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1O);
+                                    if ("Y".equals(dbHandler.getSendTy(fileList.get(rowCnt), nn1O))) {
+                                        rowCnt++;
+                                    } else {
+                                        bTrue = false ;
+                                    }
+                                }
                             }
                         } catch (Exception e) {
 
