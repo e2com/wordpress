@@ -183,7 +183,7 @@ public class MediaPostService extends Service {
                             File n = new File(fileList.get(rowCnt));
                             final String nn = n.getName();
                             String nn1 = nn.replaceAll(" ", "_");
-                            Log.d(TAG, "fleName (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1);
+                            Log.d(TAG, "fileName (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1);
                             if (!"Y".equals(dbHandler.getSendTy(fileList.get(rowCnt), nn1))) {
                                 try {
                                     if (!sendIng) { // 전송중이 아닐때만
@@ -195,17 +195,20 @@ public class MediaPostService extends Service {
                                 }
                             } else {
                                 rowCnt++; // 전송한 파일 이면 다음으로 넘어가게 하기 위해서.
+                                if (dbHandler != null) dbHandler.close();
                                 boolean bTrue = true ;
                                 while(bTrue) {
                                     File nO = new File(fileList.get(rowCnt));
                                     String nnO = nO.getName();
                                     String nn1O = nnO.replaceAll(" ", "_");
-                                    Log.d(TAG, "fleName (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1O);
+                                    dbHandler = DBHandler.open(getApplicationContext()) ;
+                                    Log.d(TAG, "fileName (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1O);
                                     if ("Y".equals(dbHandler.getSendTy(fileList.get(rowCnt), nn1O))) {
                                         rowCnt++;
                                     } else {
                                         bTrue = false ;
                                     }
+                                    dbHandler.close();
                                 }
                             }
                         } catch (Exception e) {
