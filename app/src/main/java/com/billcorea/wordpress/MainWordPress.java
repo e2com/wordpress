@@ -9,23 +9,19 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.ExifInterface;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.SystemClock;
-import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
-import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
 import android.view.Menu;
@@ -35,7 +31,6 @@ import android.view.View;
 import android.webkit.MimeTypeMap;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.Button;
 import android.widget.ListView;
 import android.widget.Toast;
 
@@ -75,7 +70,6 @@ public class MainWordPress extends AppCompatActivity {
     Gson gson;
     ProgressDialog progressDialog;
     ListView postList;
-    Button btn1 ;
     Map<String,Object> mapPost;
     Map<String,Object> mapTitle;
     Map<String, Object> mapToken;
@@ -115,8 +109,6 @@ public class MainWordPress extends AppCompatActivity {
         mediaPostService = new MediaPostService();
         restartService = new RestartService();
 
-        //fileList = getPathOfAllImages() ; // MediaPostService 에서만 하는 것으로
-
         sToken = getToken() ;
 
         // 죽지 않도록 등록 하기
@@ -132,7 +124,112 @@ public class MainWordPress extends AppCompatActivity {
         IntentFilter intentFilter = new IntentFilter("com.billcorea.wordpress.MediaPostService");
         registerReceiver(restartService, intentFilter);
 
-        //VolleyLog.DEBUG = true ;
+        // 화면 초기화 하면서 Post 조회
+        getPostListView() ;
+
+        postList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                mapPost = (Map<String,Object>)list.get(position);
+                postID = ((Double)mapPost.get("id")).intValue();
+
+                Intent intent = new Intent(getApplicationContext(),Post.class);
+                intent.putExtra("id", ""+postID);
+                startActivity(intent);
+            }
+        });
+
+        // 이 경로는 내 폰에서 만 가능한 경로임.
+        rootFD = "/storage/572B-3465" ;
+        Log.d(TAG, "rootFD=" + rootFD) ;
+
+        /* ftp 로 전송해 주지 않아도 이미지 파일의 전송은 가능함. */
+        utilFTP.ConnectFTP(); // 객체 선언
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                bFTPConnect = utilFTP.ftpConnect(utilFTP.SERVER, utilFTP.ID, utilFTP.PASS, utilFTP.port) ;
+                if(bFTPConnect == true) {
+                    Log.d(TAG, "Connection Success");
+                }
+                else {
+                    Log.d(TAG, "Connection failed");
+                }
+            }
+        }).start();
+
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        Log.i(TAG,"onDestroy");
+        //브로드 캐스트 해제
+        unregisterReceiver(restartService);
+    }
+
+    /**
+     * 상단 오른쪽 팝업 메뉴 구성
+     * @param item
+     * @return
+     */
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle item selection
+        switch (item.getItemId()) {
+            case R.id.ftpSend:
+                if (getWIFIStatus()) {
+                    if (bFTPConnect) getFileList(rootFD) ;
+                } else {
+                    Toast.makeText(MainWordPress.this, "WIFI 사용을 확인하세요.", Toast.LENGTH_LONG) ;
+                    Log.d(TAG, "WIFI 사용 상태가 아님.") ;
+                }
+                return true;
+            case R.id.postText:
+                Log.d(TAG, "Test Postion ...");
+
+                setPostTextExample() ;
+                getPostListView() ;
+
+                return true ;
+            case R.id.imgPost:
+                try {
+
+                    File n = new File(fileList.get(0).toString());
+                    final String nn = n.getName() ;
+                    String nn1 = nn.replaceAll(" ", "_");
+                    Log.d(TAG, "Call URL=" + StringUtil.getMediaSearchUrl(nn)) ;
+
+                    setImagePost(fileList.get(0).toString(), nn1);
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    Log.d(TAG, "imgPost Error:" + e.toString()) ;
+                }
+                return true ;
+            case R.id.backupData:
+                if (isExternalStorageAvail()) {
+                    new MainWordPress.ExportDatabaseTask().execute();
+                    SystemClock.sleep(500);
+                } else {
+                    Toast.makeText(MainWordPress.this,
+                            "Backup이 안되요...", Toast.LENGTH_SHORT)
+                            .show();
+                }
+                return true ;
+            case R.id.help:
+                // showHelp();
+                return true;
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+    }
+
+    /**
+     *  Text Post 연습으로 등록 하기
+     */
+    public void setPostTextExample() {
 
         final StringRequest requestPost = new StringRequest(Request.Method.POST, StringUtil.getPostUrl(), new Response.Listener<String>() {
             @Override
@@ -202,6 +299,16 @@ public class MainWordPress extends AppCompatActivity {
             }
         });
 
+        rQueue = Volley.newRequestQueue(MainWordPress.this);
+        VolleyLog.DEBUG = true ;
+        rQueue.add(requestPost);
+    }
+
+    /**
+     * 화면의 ListView 에 post 조회하기
+     */
+    public void getPostListView() {
+
         final StringRequest request = new StringRequest(Request.Method.GET, StringUtil.getUrl(), new Response.Listener<String>() {
             @Override
             public void onResponse(String s) {
@@ -229,169 +336,6 @@ public class MainWordPress extends AppCompatActivity {
         request.setRetryPolicy(new DefaultRetryPolicy(300000, DefaultRetryPolicy.DEFAULT_MAX_RETRIES,  DefaultRetryPolicy.DEFAULT_BACKOFF_MULT));
         rQueue = Volley.newRequestQueue(MainWordPress.this);
         rQueue.add(request);
-
-        btn1 = (Button)findViewById(R.id.button1);
-        btn1.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Log.d(TAG, "onClicking ...");
-
-                rQueue = Volley.newRequestQueue(MainWordPress.this);
-                VolleyLog.DEBUG = true ;
-                rQueue.add(requestPost);
-                Log.d(TAG, "reQuest...");
-                rQueue = Volley.newRequestQueue(MainWordPress.this);
-                rQueue.add(request);
-            }
-        });
-
-        postList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                mapPost = (Map<String,Object>)list.get(position);
-                postID = ((Double)mapPost.get("id")).intValue();
-
-                Intent intent = new Intent(getApplicationContext(),Post.class);
-                intent.putExtra("id", ""+postID);
-                startActivity(intent);
-            }
-        });
-
-        // 이 경로는 내 폰에서 만 가능한 경로임.
-        rootFD = "/storage/572B-3465" ;
-        Log.d(TAG, "rootFD=" + rootFD) ;
-
-        /* ftp 로 전송해 주지 않아도 이미지 파일의 전송은 가능함. */
-        utilFTP.ConnectFTP(); // 객체 선언
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                bFTPConnect = utilFTP.ftpConnect(utilFTP.SERVER, utilFTP.ID, utilFTP.PASS, utilFTP.port) ;
-                if(bFTPConnect == true) {
-                    Log.d(TAG, "Connection Success");
-                }
-                else {
-                    Log.d(TAG, "Connection failed");
-                }
-            }
-        }).start();
-
-    }
-
-    private ArrayList<String> getPathOfAllImages()
-    {
-        ArrayList<String> result = new ArrayList<>();
-        Uri uri = android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
-        String[] projection = { MediaStore.MediaColumns.DATA, MediaStore.MediaColumns.DISPLAY_NAME };
-
-        Cursor cursor = getContentResolver().query(uri, projection, null, null, MediaStore.MediaColumns.DATE_ADDED + " desc");
-        int columnIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATA);
-        int columnDisplayname = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME);
-
-        Log.i(TAG, "--------------------------------- Start Get Image List");
-        int lastIndex;
-        while (cursor.moveToNext())
-        {
-            String absolutePathOfImage = cursor.getString(columnIndex);
-            String nameOfFile = cursor.getString(columnDisplayname);
-            lastIndex = absolutePathOfImage.lastIndexOf(nameOfFile);
-            lastIndex = lastIndex >= 0 ? lastIndex : nameOfFile.length() - 1;
-
-            if (!TextUtils.isEmpty(absolutePathOfImage))
-            {
-                result.add(absolutePathOfImage);
-            }
-        }
-
-        int fileCnt = 0 ;
-        for (String string : result)
-        {
-            File n = new File(string);
-            final String nn = n.getName() ;
-            String nn1 = nn.replaceAll(" ", "_");
-            try {
-                ExifInterface exif = new ExifInterface(string);
-                showExif(exif);
-                Log.d("DBHandler", "path=" + string + "," + nn1) ;
-                dbHandler = DBHandler.open(getApplicationContext());
-                if (dbHandler.chkFileExist(string, nn1)) {
-                    // 이미 등록된 파일은 전송을 했다고 봄
-                    // dbHandler.updateSendTy(string, nn1, "N");
-                } else {
-                    picInfo.put("fullpath", string);
-                    picInfo.put("filename", nn1);
-                    picInfo.put("send_ty", "N"); //  처음에는 전송하지 않음으로 설정
-                    Log.d(TAG, "insert=" + string + "/" + nn1);
-                    dbHandler.insertMapData(picInfo);
-                }
-                dbHandler.close();
-            } catch (Exception e) {
-
-            }
-            fileCnt++ ;
-        }
-
-        Log.i(TAG, "--------------------------------- end Get Image List=" + fileCnt);
-        return result;
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-
-        Log.i(TAG,"onDestroy");
-        //브로드 캐스트 해제
-        unregisterReceiver(restartService);
-    }
-
-    /**
-     * 상단 오른쪽 팝업 메뉴 구성
-     * @param item
-     * @return
-     */
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle item selection
-        switch (item.getItemId()) {
-            case R.id.ftpSend:
-                if (getWIFIStatus()) {
-                    if (bFTPConnect) getFileList(rootFD) ;
-                } else {
-                    Toast.makeText(MainWordPress.this, "WIFI 사용을 확인하세요.", Toast.LENGTH_LONG) ;
-                    Log.d(TAG, "WIFI 사용 상태가 아님.") ;
-                }
-                return true;
-            case R.id.imgPost:
-                try {
-
-                    File n = new File(fileList.get(0).toString());
-                    final String nn = n.getName() ;
-                    String nn1 = nn.replaceAll(" ", "_");
-                    Log.d(TAG, "Call URL=" + StringUtil.getMediaSearchUrl(nn)) ;
-
-                    setImagePost(fileList.get(0).toString(), nn1);
-
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    Log.d(TAG, "imgPost Error:" + e.toString()) ;
-                }
-                return true ;
-            case R.id.backupData:
-                if (isExternalStorageAvail()) {
-                    new MainWordPress.ExportDatabaseTask().execute();
-                    SystemClock.sleep(500);
-                } else {
-                    Toast.makeText(MainWordPress.this,
-                            "Backup이 안되요...", Toast.LENGTH_SHORT)
-                            .show();
-                }
-                return true ;
-            case R.id.help:
-                // showHelp();
-                return true;
-            default:
-                return super.onOptionsItemSelected(item);
-        }
     }
 
     /**
