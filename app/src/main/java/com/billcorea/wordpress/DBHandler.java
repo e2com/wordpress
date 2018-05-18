@@ -113,7 +113,8 @@ public class DBHandler {
 		if(cursor.moveToNext()){
 			returnValue = true ;
 		}
-        Log.d(TAG, "chkFileExist(" + fullpath + "," + filename + ")=" + returnValue ) ;
+		cursor.close();
+        //Log.d(TAG, "chkFileExist(" + fullpath + "," + filename + ")=" + returnValue ) ;
 		return returnValue;
 	}
 
@@ -129,6 +130,7 @@ public class DBHandler {
 				strResult = "";
 			}
 		}
+		cursor.close();
 		Log.d(TAG, "getSendTy(" + fullpath + "," + filename + ")=" + strResult ) ;
 		return strResult;
 	}

@@ -11,6 +11,7 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
 import android.media.ExifInterface;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
@@ -47,6 +48,9 @@ import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -195,20 +199,20 @@ public class MediaPostService extends Service {
                                 }
                             } else {
                                 rowCnt++; // 전송한 파일 이면 다음으로 넘어가게 하기 위해서.
-                                if (dbHandler != null) dbHandler.close();
+                                //if (dbHandler != null) dbHandler.close();
                                 boolean bTrue = true ;
                                 while(bTrue) {
                                     File nO = new File(fileList.get(rowCnt));
                                     String nnO = nO.getName();
                                     String nn1O = nnO.replaceAll(" ", "_");
-                                    dbHandler = DBHandler.open(getApplicationContext()) ;
+                                    //dbHandler = DBHandler.open(getApplicationContext()) ;
                                     Log.d(TAG, "fileName (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1O);
                                     if ("Y".equals(dbHandler.getSendTy(fileList.get(rowCnt), nn1O))) {
                                         rowCnt++;
                                     } else {
                                         bTrue = false ;
                                     }
-                                    dbHandler.close();
+                                    //dbHandler.close();
                                 }
                             }
                         } catch (Exception e) {
@@ -238,16 +242,38 @@ public class MediaPostService extends Service {
         final String imgName = fName.replaceAll(" ", "_") ;
         final String sndFullPath = imgFileName ;
         final String sndFileName = imgName ;
-        File iFile = new File(imgFileName) ;
-        FileInputStream bImage = null ;
+
+        // file size 을 산출해서
+        // file.length() ;
+        File f = new File(imgFileName) ;
+        int iSize = 0 ;
+        if (f.length() > 6000000) {
+            long fSize = f.length() / 1024 / 1024 ;
+            iSize = (int) fSize / 6 ;
+        } else {
+            iSize = 1 ;
+        }
+        /* 사진이 누워 있는 지 보고 정리를 하는 것임. */
+        int exifOrientation = 0 ;
         try {
-            bImage = new FileInputStream(iFile);
-        } catch (Exception e) {
+            ExifInterface exif = new ExifInterface(imgFileName);
+            exifOrientation = exif.getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+
+        } catch (IOException e) {
 
         }
-        Bitmap bm = BitmapFactory.decodeStream(bImage);
+        int exifDegree = exifOrientationToDegrees(exifOrientation);
+
+        Log.d(TAG, exifOrientation + "/" + exifDegree) ;
+
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inPreferredConfig = Bitmap.Config.ARGB_8888; // 색상을 떨어지게함.
+        options.inSampleSize = iSize ; // 1/2 로 줄인다 ???
+        Bitmap bm = BitmapFactory.decodeFile(imgFileName, options) ;
+        bm = rotate(bm, exifDegree) ; // 사진 위치 정렬
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        bm.compress(Bitmap.CompressFormat.JPEG, 100 , baos);
+        bm.compress(Bitmap.CompressFormat.JPEG, 100 , baos); // decodeFile 에서 이미 50% 로 줄인다고 봄.
         byte[] b = baos.toByteArray();
 
         final StringRequest requestPost = new StringRequest(Request.Method.POST, StringUtil.getMediaUrl(), new Response.Listener<String>() {
@@ -338,6 +364,61 @@ public class MediaPostService extends Service {
         Log.d(TAG, "Media Post request Start -------------------------------------------------------------------------") ;
         sendIng = true ; // 전송중 이라고 설정
         rQueue.add(requestPost);
+    }
+
+    /**
+     * EXIF정보를 회전각도로 변환하는 메서드
+     *
+     * @param exifOrientation EXIF 회전각
+     * @return 실제 각도
+     */
+    public int exifOrientationToDegrees(int exifOrientation)
+    {
+        if(exifOrientation == ExifInterface.ORIENTATION_ROTATE_90)
+        {
+            return 90;
+        }
+        else if(exifOrientation == ExifInterface.ORIENTATION_ROTATE_180)
+        {
+            return 180;
+        }
+        else if(exifOrientation == ExifInterface.ORIENTATION_ROTATE_270)
+        {
+            return 270;
+        }
+        return 0;
+    }
+
+    /**
+     * 이미지를 회전시킵니다.
+     *
+     * @param bitmap 비트맵 이미지
+     * @param degrees 회전 각도
+     * @return 회전된 이미지
+     */
+    public Bitmap rotate(Bitmap bitmap, int degrees)
+    {
+        if(degrees != 0 && bitmap != null)
+        {
+            Matrix m = new Matrix();
+            m.setRotate(degrees, (float) bitmap.getWidth() / 2,
+                    (float) bitmap.getHeight() / 2);
+
+            try
+            {
+                Bitmap converted = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), m, true);
+                if(bitmap != converted)
+                {
+                    bitmap.recycle();
+                    bitmap = converted;
+                }
+            }
+            catch(OutOfMemoryError ex)
+            {
+                // 메모리가 부족하여 회전을 시키지 못할 경우 그냥 원본을 반환합니다.
+            }
+        }
+        return bitmap;
     }
 
     /**
@@ -482,17 +563,17 @@ public class MediaPostService extends Service {
             }
         }
 
-        int nCnt = 0 ;
+        int nCnt = 0  ;
         for (String string : result)
         {
-            Log.i(TAG, "|" + string + "|");
+            //Log.i(TAG, "|" + string + "|");
             File n = new File(string);
             final String nn = n.getName() ;
             String nn1 = nn.replaceAll(" ", "_");
             try {
 
                 nCnt++ ;
-                Log.d("DBHandler", "(" + maxCnt + "," + nCnt + ")" + "path=" + string ) ;
+                // Log.d("DBHandler", "(" + maxCnt + "," + nCnt + ") path=" + string ) ;
                 try {
                     dbHandler = DBHandler.open(getApplicationContext());
                     if (dbHandler.chkFileExist(string, nn1)) {
@@ -518,6 +599,8 @@ public class MediaPostService extends Service {
             }
 
         }
+
+        Log.d(TAG, "getPathOfAllImages end") ;
         return result;
     }
 
