@@ -50,6 +50,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -160,6 +161,8 @@ public class MediaPostService extends Service {
         maxCnt = 0 ;
         picInfo = new HashMap<String, String>(); // 사진정보 취합을 위해서 초기화
         dbHandler = new DBHandler(getApplicationContext()) ; // 정보 저장을 위해서 초기화
+        dbHandler.open(getApplicationContext());
+        dbHandler.close();
 
         countDownTimer();
         countDownTimer.start();
@@ -220,7 +223,10 @@ public class MediaPostService extends Service {
                         } finally {
                             dbHandler.close();
                         }
-                        //getChkSndImage(fileList.get(rowCnt)) ;
+
+                    } else {
+                        maxCnt = 0 ; rowCnt = 0 ; // 건수 초기화 하고 다시 시작 하기
+                        fileList = getPathOfAllImages() ;
                     }
 
                 } else {
@@ -290,7 +296,7 @@ public class MediaPostService extends Service {
                     rDescription = rDescription.replaceAll("\"", "") ;
                     rDescription = rDescription.replaceAll("\\\\", "") ;
                     Log.d(TAG, "rDescription=[" + rDescription + "]");
-                    Toast.makeText(getApplicationContext(), "image Post OK!!!", Toast.LENGTH_LONG).show();
+                    Toast.makeText(getApplicationContext(), "image Post OK !!! (" + rowCnt + "," + maxCnt + ")", Toast.LENGTH_LONG).show();
                     try {
                         dbHandler = DBHandler.open(getApplicationContext());
                         Log.d(TAG, sndFullPath + ">>>>>" + sndFileName);
@@ -428,7 +434,7 @@ public class MediaPostService extends Service {
      * @param pContents  : 내용
      * @return : 잘 되면 true 반환
      */
-    public boolean setPostText(String pFullPath, String pFileName, String pContents) {
+    public boolean setPostText(final String pFullPath, final String pFileName, String pContents) {
         boolean bResult = false ;
 
         final String fpTitle = pFileName;
@@ -469,12 +475,15 @@ public class MediaPostService extends Service {
                 //Log.d(TAG, "respone(" + s.toString() + ")") ;
                 String pageName = "" ;
                 try {
-                    JSONObject obj = new JSONObject(s.toString());
-                    pageName = obj.getJSONObject("id").toString();
+                    JSONObject obj = new JSONObject(s);
+                    pageName = obj.getString("id");
                 } catch (Exception e) {
-                    pageName = "" ;
+                    pageName = "Error =" + e.toString() ;
                 }
                 Log.d(TAG, "Posting OK !!! ID<<<" + pageName + ">>> Res[" + s.toString() + "]") ;
+                dbHandler = DBHandler.open(getApplicationContext()) ;
+                dbHandler.updatePostId(pFullPath, pFileName, pageName);
+                dbHandler.close();
                 Toast.makeText(getApplicationContext(), "Posting OK !!! ID=" + pageName, Toast.LENGTH_LONG).show();
             }
         }, new Response.ErrorListener() {
@@ -580,7 +589,11 @@ public class MediaPostService extends Service {
                         // 이미 등록된 파일은 전송을 했다고 봄
                         // dbHandler.updateSendTy(string, nn1, "N");
                     } else {
-                        ExifInterface exif = new ExifInterface(string);
+                        Uri uri1 = Uri.fromFile(n);
+                        InputStream in = getApplicationContext().getContentResolver().openInputStream(uri1);
+                        //ExifInterface exif = new ExifInterface(string);
+                        ExifInterface exif = new ExifInterface(in);
+                        in.close(); // 닫아야지 오류가 나지 않음.
                         picInfo.clear();
                         showExif(exif);
                         picInfo.put("fullpath", string);
@@ -596,6 +609,8 @@ public class MediaPostService extends Service {
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Some Error=" + e.toString()) ;
+            } finally {
+                if (dbHandler != null) dbHandler.close();
             }
 
         }

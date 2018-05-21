@@ -85,7 +85,7 @@ public class DBHandler {
 		ContentValues values = new ContentValues();
 		values.put("text_post_id", postId);
 		result = db.update("UploadImageList", values, "fullpath = '" + fullpath + "' and filename ='" + filename +"'", null );
-		Log.d(TAG, "update cnt=<" + result + ">" + fullpath + "," + filename) ;
+		Log.d(TAG, "update cnt=<" + result + ">" + fullpath + "," + filename + "=" + postId) ;
 		return result ;
 	}
 	
