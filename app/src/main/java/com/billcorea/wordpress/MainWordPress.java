@@ -14,6 +14,7 @@ import android.graphics.BitmapFactory;
 import android.media.ExifInterface;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
@@ -52,6 +53,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -72,7 +74,6 @@ public class MainWordPress extends AppCompatActivity {
     ListView postList;
     Map<String,Object> mapPost;
     Map<String,Object> mapTitle;
-    Map<String, Object> mapToken;
     Map<String, String> picInfo ;
     int postID;
     String postTitle[];
@@ -179,12 +180,9 @@ public class MainWordPress extends AppCompatActivity {
         // Handle item selection
         switch (item.getItemId()) {
             case R.id.ftpSend:
-                if (getWIFIStatus()) {
-                    if (bFTPConnect) getFileList(rootFD) ;
-                } else {
-                    Toast.makeText(MainWordPress.this, "WIFI 사용을 확인하세요.", Toast.LENGTH_LONG) ;
-                    Log.d(TAG, "WIFI 사용 상태가 아님.") ;
-                }
+                dbHandler = DBHandler.open(getApplicationContext()) ;
+                dbHandler.updateAllFTPReset();
+                dbHandler.close();
                 return true;
             case R.id.postText:
                 Log.d(TAG, "Test Postion ...");
@@ -481,54 +479,6 @@ public class MainWordPress extends AppCompatActivity {
         rQueue.add(requestPost);
     }
 
-    public static String getBase64String( String fileFullPath ) throws Exception{
-
-        String content = "" ;
-
-        if( fileFullPath.length() > 0 )
-        {
-            String filePathName = fileFullPath;
-            String fileExtName = filePathName.substring( filePathName.lastIndexOf(".") + 1);
-
-            FileInputStream inputStream = null;
-            ByteArrayOutputStream byteOutStream = null;
-
-            try
-            {
-                File file = new File( filePathName );
-
-                if( file.exists() )
-                {
-                    inputStream = new FileInputStream( file );
-                    byteOutStream = new ByteArrayOutputStream();
-
-                    int len = 0;
-                    byte[] buf = new byte[1024];
-                    while( (len = inputStream.read( buf )) != -1 ) {
-                        byteOutStream.write(buf, 0, len);
-                    }
-
-                    byte[] fileArray = byteOutStream.toByteArray();
-                    content = new String( Base64.encodeToString( fileArray, Base64.DEFAULT) ); //  Base64.encodeToString(data, Base64.DEFAULT);
-
-                    String changeString = "data:image/"+ fileExtName +";base64, "+ content;
-                    content = content.replace(content, changeString);
-                }
-            }
-            catch( IOException e)
-            {
-                e.printStackTrace();
-            }
-            finally
-            {
-                inputStream.close();
-                byteOutStream.close();
-            }
-        }
-
-        return content;
-    }
-
     public void getFileList(String filePath) {
         file = new File(filePath) ;
         File list[] = file.listFiles() ;
@@ -544,6 +494,7 @@ public class MainWordPress extends AppCompatActivity {
                     Log.d(TAG, "mimeType=" + mimeType) ;
                     try {
                         ExifInterface exif = new ExifInterface(filename);
+                        picInfo = new HashMap<String, String>(); // 사진정보 취합을 위해서 초기화
                         showExif(exif);
                     } catch (IOException e) {
                         e.printStackTrace();
@@ -562,6 +513,20 @@ public class MainWordPress extends AppCompatActivity {
 
         String strDate = getUploadYM() ;
 
+        try {
+            File n = new File(strPath) ;
+            Uri uri1 = Uri.fromFile(n);
+            InputStream in = getApplicationContext().getContentResolver().openInputStream(uri1);
+            ExifInterface exif = new ExifInterface(in);
+            in.close(); // 닫아야지 오류가 나지 않음.
+            String getDate = getTagString(ExifInterface.TAG_DATETIME, exif) ;
+            getDate = getDate.replaceAll(" ",":"); // 날자와 시간 사이에 공백이 있어서
+            String[] getDateArry = getDate.split(":");
+            strDate = "/" + getDateArry[3]+getDateArry[4]+getDateArry[5]; // 경로 구분자 앞에 추가함.
+            Log.d(TAG, "날자구하기:" + getDate + ">>>" + strDate) ;
+        } catch (Exception e) {
+
+        }
         final String strDefaultDir = utilFTP.mDefaultBaseDirectory + strDate;
         if (bFTPConnect && getWIFIStatus()) {
             Thread sendFileftp = new Thread()
@@ -570,7 +535,13 @@ public class MainWordPress extends AppCompatActivity {
                     Log.d(TAG, "SendFTP ----------------------------------------") ;
                     if(bFTPConnect) {
                         Log.d(TAG, "SendFTP Connect OK----------------------------------------") ;
-                        bSendFTP = utilFTP.ftpUploadFile(strPath, strfName, strDefaultDir);
+                        try {
+                            bSendFTP = utilFTP.ftpUploadFile(strPath, strfName, strDefaultDir);
+                        } catch (Exception e) {
+                            Log.d(TAG, "FTP ERROR ---------------------------------- ") ;
+                            bSendFTP = false ;
+                            bFTPConnect = false ;
+                        }
                     }
                 }
             };
@@ -697,6 +668,18 @@ public class MainWordPress extends AppCompatActivity {
 
             }else{
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_NETWORK_STATE},101);
+            }
+        }
+
+        permissioninfo = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE);
+        if(permissioninfo == PackageManager.PERMISSION_GRANTED){
+            Toast.makeText(this,"PHONE STATUS 얻기 권한 있음",Toast.LENGTH_SHORT).show();
+        }else{
+            if(ActivityCompat.shouldShowRequestPermissionRationale(this,Manifest.permission.READ_PHONE_STATE)){
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_PHONE_STATE},102);
+
+            }else{
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_PHONE_STATE},102);
             }
         }
     }

@@ -69,7 +69,7 @@ public class DBHandler {
 		values.put("send_ty", send_ty);
 		values.put("real_url", rDescription);
 		result = db.update("UploadImageList", values, "fullpath = '" + fullpath + "' and filename ='" + filename +"'", null );
-		Log.d(TAG, "update cnt=<" + result + ">" + fullpath + "," + filename) ;
+		Log.d(TAG, "updateSendTy cnt=<" + result + ">" + fullpath + "," + filename + "," + send_ty + "," + rDescription) ;
 		return result ;
 	}
 
@@ -85,10 +85,35 @@ public class DBHandler {
 		ContentValues values = new ContentValues();
 		values.put("text_post_id", postId);
 		result = db.update("UploadImageList", values, "fullpath = '" + fullpath + "' and filename ='" + filename +"'", null );
-		Log.d(TAG, "update cnt=<" + result + ">" + fullpath + "," + filename + "=" + postId) ;
+		Log.d(TAG, "updatePostId cnt=<" + result + ">" + fullpath + "," + filename + "=" + postId) ;
 		return result ;
 	}
-	
+
+	/**
+	 * FTP 전송을 기록함
+	 * @param fullpath
+	 * @param filename
+	 * @param send_ty : FTP 전송 여부
+	 * @return
+	 */
+	public long updatemFtpTy(String fullpath, String filename, String send_ty) {
+		long result = 0 ;
+		ContentValues values = new ContentValues();
+		values.put("send_ty", send_ty);
+		result = db.update("UploadImageList", values, "fullpath = '" + fullpath + "' and filename ='" + filename +"'", null );
+		Log.d(TAG, "updatemFtpTy cnt=<" + result + ">" + fullpath + "," + filename + "," + send_ty) ;
+		return result ;
+	}
+
+	public long updateAllFTPReset() {
+		long result = 0 ;
+		ContentValues values = new ContentValues();
+		values.put("send_ty", "Y");
+		result = db.update("UploadImageList", values, "send_ty = 'M'", null );
+		Log.d(TAG, "updatemFtpTy cnt=<" + result + ">" ) ;
+		return result ;
+	}
+
 	public Cursor selectAll(){
 		String sql = "select * from UploadImageList order by _id desc" ;
 		Cursor cursor = db.rawQuery(sql, null) ;
@@ -131,7 +156,7 @@ public class DBHandler {
 			}
 		}
 		cursor.close();
-		Log.d(TAG, "getSendTy(" + fullpath + "," + filename + ")=" + strResult ) ;
+		//Log.d(TAG, "getSendTy(" + fullpath + "," + filename + ")=" + strResult ) ;
 		return strResult;
 	}
 }

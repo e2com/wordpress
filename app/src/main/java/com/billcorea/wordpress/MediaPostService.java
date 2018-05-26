@@ -1,6 +1,5 @@
 package com.billcorea.wordpress;
 
-import android.annotation.TargetApi;
 import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationManager;
@@ -16,7 +15,6 @@ import android.media.ExifInterface;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
-import android.os.Build;
 import android.os.CountDownTimer;
 import android.os.IBinder;
 import android.os.SystemClock;
@@ -28,7 +26,6 @@ import android.webkit.MimeTypeMap;
 import android.widget.Toast;
 
 import com.android.volley.AuthFailureError;
-import com.android.volley.DefaultRetryPolicy;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
 import com.android.volley.Response;
@@ -37,24 +34,15 @@ import com.android.volley.VolleyError;
 import com.android.volley.VolleyLog;
 import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 
@@ -63,7 +51,7 @@ public class MediaPostService extends Service {
     String TAG = "MediaPostService" ;
     File file = null ;
 
-    private static final int MILLISINFUTURE = 3000 * 5 * 60 * 1000;  // 3000개 파일 * 5분 : Timer 의 제한 시간
+    private static final int MILLISINFUTURE = 1000 * 3 * 60 * 1000;  // 3000개 파일 * 5분 : Timer 의 제한 시간
     private static final int COUNT_DOWN_INTERVAL = 3000;  // loop 재실행 시간 3초에 1회
     private static final int SEND_IMAGE_INTERVAL = 500000; // image upload 대기시간 500초 까지 대기
 
@@ -71,19 +59,13 @@ public class MediaPostService extends Service {
     ArrayList<String> fileList = null ;
     int maxCnt = 0 ;
     int rowCnt = 0 ;
-    int errCnt = 0 ;
 
     boolean sendIng = false ;
+    boolean bFTPConnect = false ;
+    boolean bSendFTP = false ;
 
-    Gson gson;
-    List<Object> list;
-    Map<String,Object> mapPost;
-    Map<String,Object> mapId;
-    Map<String,Object> mapTitle;
     Map<String, String> picInfo ;
-    String postTitle[];
     RequestQueue rQueue ;
-    StringRequest request ;
 
     DBHandler dbHandler = null ;
 
@@ -179,6 +161,22 @@ public class MediaPostService extends Service {
         countDownTimer = new CountDownTimer(MILLISINFUTURE, COUNT_DOWN_INTERVAL) {
             public void onTick(long millisUntilFinished) {
 
+                // FTP 전송이 가능한지 확인.
+                if (!bFTPConnect) {
+                    utilFTP.ConnectFTP(); // 객체 선언
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            bFTPConnect = utilFTP.ftpConnect(utilFTP.SERVER, utilFTP.ID, utilFTP.PASS, utilFTP.port);
+                            if (bFTPConnect == true) {
+                                Log.d(TAG, "Connection Success");
+                            } else {
+                                Log.d(TAG, "Connection failed");
+                            }
+                        }
+                    }).start();
+                }
+
                 if (getWIFIStatus() && StringUtil.sToken != null) {
                     if (maxCnt < 1) {
                         fileList = getPathOfAllImages() ;
@@ -190,32 +188,41 @@ public class MediaPostService extends Service {
                             File n = new File(fileList.get(rowCnt));
                             final String nn = n.getName();
                             String nn1 = nn.replaceAll(" ", "_");
-                            Log.d(TAG, "fileName (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1);
-                            if (!"Y".equals(dbHandler.getSendTy(fileList.get(rowCnt), nn1))) {
+                            //Log.d(TAG, "fileName (" + rowCnt + "/" + maxCnt + ")");
+                            if (!"Y".equals(dbHandler.getSendTy(fileList.get(rowCnt), nn1)) && !"M".equals(dbHandler.getSendTy(fileList.get(rowCnt), nn1))) {
                                 try {
                                     if (!sendIng) { // 전송중이 아닐때만
                                         setImagePost(fileList.get(rowCnt), nn1);
+                                        Log.d(TAG, "fileName Post Ok! (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1 + ", maxCnt=" + maxCnt);
                                     }
-                                    //dbHandler.updateSendTy(fileList.get(rowCnt), nn1,"Y");
                                 } catch (Exception e) {
 
                                 }
                             } else {
+                                if (!"M".equals(dbHandler.getSendTy(fileList.get(rowCnt), nn1))) {
+                                    if (putFTPSend(fileList.get(rowCnt), nn1)) {
+                                        dbHandler.updatemFtpTy(fileList.get(rowCnt), nn1, "M");
+                                        Log.d(TAG, "fileName FTP Send (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1 + ", maxCnt=" + maxCnt);
+                                    }
+                                } // FTP 체크를 먼저 하고 다음으로
                                 rowCnt++; // 전송한 파일 이면 다음으로 넘어가게 하기 위해서.
-                                //if (dbHandler != null) dbHandler.close();
                                 boolean bTrue = true ;
                                 while(bTrue) {
                                     File nO = new File(fileList.get(rowCnt));
                                     String nnO = nO.getName();
                                     String nn1O = nnO.replaceAll(" ", "_");
-                                    //dbHandler = DBHandler.open(getApplicationContext()) ;
-                                    Log.d(TAG, "fileName (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1O);
+                                    //Log.d(TAG, "fileName (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1O + ", maxCnt=" + maxCnt) ;
                                     if ("Y".equals(dbHandler.getSendTy(fileList.get(rowCnt), nn1O))) {
+                                        if (!"M".equals(dbHandler.getSendTy(fileList.get(rowCnt), nn1O))) {
+                                            if (putFTPSend(fileList.get(rowCnt), nn1O)) {
+                                                dbHandler.updatemFtpTy(fileList.get(rowCnt), nn1O, "M");
+                                                Log.d(TAG, "fileName FTP Send (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1O + ", maxCnt=" + maxCnt) ;
+                                            }
+                                        } // FTP 체크를 먼저 하고 다음으로
                                         rowCnt++;
                                     } else {
                                         bTrue = false ;
                                     }
-                                    //dbHandler.close();
                                 }
                             }
                         } catch (Exception e) {
@@ -228,6 +235,8 @@ public class MediaPostService extends Service {
                         maxCnt = 0 ; rowCnt = 0 ; // 건수 초기화 하고 다시 시작 하기
                         fileList = getPathOfAllImages() ;
                     }
+
+                    Toast.makeText(getApplicationContext(), "진행중...(" + (rowCnt / maxCnt * 100)+ "%)",  Toast.LENGTH_LONG).show();
 
                 } else {
                     Log.d(TAG, "onTick !!! WifiStatus=(" + getWIFIStatus() + "), Token=" + StringUtil.sToken) ;
@@ -588,6 +597,11 @@ public class MediaPostService extends Service {
                     if (dbHandler.chkFileExist(string, nn1)) {
                         // 이미 등록된 파일은 전송을 했다고 봄
                         // dbHandler.updateSendTy(string, nn1, "N");
+                        if ("M".equals(dbHandler.getSendTy(string, nn1))) {
+                            // posting / ftp 둘다 했으니까. 제외
+                            maxCnt--;
+                        }
+                        Log.i(TAG, "(" + maxCnt + ")") ;
                     } else {
                         Uri uri1 = Uri.fromFile(n);
                         InputStream in = getApplicationContext().getContentResolver().openInputStream(uri1);
@@ -612,7 +626,6 @@ public class MediaPostService extends Service {
             } finally {
                 if (dbHandler != null) dbHandler.close();
             }
-
         }
 
         Log.d(TAG, "getPathOfAllImages end") ;
@@ -684,6 +697,70 @@ public class MediaPostService extends Service {
             isWiFi = activeNetwork.getType() == ConnectivityManager.TYPE_WIFI;
         }
         return isWiFi ;
+    }
+
+
+    /**
+     * 파일을 전송하기 위해서...
+     * @param pathFileName : 전체경로와 파일이름까지
+     * @param fileNameOnly : 파일의 이름만 (경로는 뺴고)
+     * @return
+     */
+    public boolean putFTPSend(String pathFileName, String fileNameOnly) {
+        final String strPath = pathFileName ;
+        final String strfName = fileNameOnly ;
+
+        boolean bResult = false ;
+
+        String strDate = "" ;
+
+        try {
+            File n = new File(strPath) ;
+            Uri uri1 = Uri.fromFile(n);
+            InputStream in = getApplicationContext().getContentResolver().openInputStream(uri1);
+            ExifInterface exif = new ExifInterface(in);
+            in.close(); // 닫아야지 오류가 나지 않음.
+            String getDate = getTagString(ExifInterface.TAG_DATETIME, exif) ;
+            getDate = getDate.replaceAll(" ",":"); // 날자와 시간 사이에 공백이 있어서
+            String[] getDateArry = getDate.split(":");
+            strDate = "/" + getDateArry[3]+getDateArry[4]+getDateArry[5]; // 경로 구분자 앞에 추가함.
+            //Log.d(TAG, "날자구하기:" + getDate + ">>>" + strDate) ;
+        } catch (Exception e) {
+
+        }
+        final String strDefaultDir = utilFTP.mDefaultBaseDirectory + strDate;
+        if (bFTPConnect && getWIFIStatus() && !"".equals(strDate)) {
+            Thread sendFileftp = new Thread()
+            {
+                public void run() {
+                    if(bFTPConnect) {
+                        try {
+                            bSendFTP = utilFTP.ftpUploadFile(strPath, strfName, strDefaultDir);
+                        } catch (Exception e) {
+                            //Log.d(TAG, "FTP ERROR ---------------------------------- ") ;
+                            bSendFTP = false ;
+                            //bFTPConnect = false ;
+                        }
+                    }
+                }
+            };
+            sendFileftp.start();
+            try {
+                sendFileftp.join();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            if (bSendFTP) {
+                Log.d(TAG, "Send OK=" + strfName);
+                bResult = true ;
+            } else {
+                Log.d(TAG, "Send Error=" + strfName);
+            }
+        } else {
+            Log.d(TAG, "WIFI 로 FTP 를 사용할 수 없음.") ;
+            Toast.makeText(getApplicationContext(), "WIFI 로 FTP 를 사용할 수 없음.", Toast.LENGTH_LONG);
+        }
+        return bResult ;
     }
 
     /**
