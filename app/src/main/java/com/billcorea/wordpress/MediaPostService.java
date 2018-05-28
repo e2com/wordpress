@@ -628,7 +628,9 @@ public class MediaPostService extends Service {
                         picInfo.put("filename", nn1);
                         picInfo.put("send_ty", "N"); //  처음에는 전송하지 않음으로 설정
                         Log.d(TAG, "insert=" + string + "/" + nn1);
-                        dbHandler.insertMapData(picInfo);
+                        if (!"Y".equals(dbHandler.getSendTy(string, nn1))) {
+                            dbHandler.insertMapData(picInfo);
+                        }
                     }
                 } catch (Exception e) {
 
