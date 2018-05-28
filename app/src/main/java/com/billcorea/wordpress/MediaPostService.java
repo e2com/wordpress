@@ -11,6 +11,7 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
+import android.icu.text.DecimalFormat;
 import android.media.ExifInterface;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
@@ -41,6 +42,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -51,7 +56,7 @@ public class MediaPostService extends Service {
     String TAG = "MediaPostService" ;
     File file = null ;
 
-    private static final int MILLISINFUTURE = 1000 * 3 * 60 * 1000;  // 3000개 파일 * 5분 : Timer 의 제한 시간
+    private static final int MILLISINFUTURE = 60 * 60 * 1000;  // 60 분 : 1시간
     private static final int COUNT_DOWN_INTERVAL = 3000;  // loop 재실행 시간 3초에 1회
     private static final int SEND_IMAGE_INTERVAL = 500000; // image upload 대기시간 500초 까지 대기
 
@@ -181,14 +186,14 @@ public class MediaPostService extends Service {
                     if (maxCnt < 1) {
                         fileList = getPathOfAllImages() ;
                     }
-                    Log.d(TAG, "rowCnt=" + rowCnt + ", maxCnt=" + maxCnt) ;
+                    //Log.d(TAG, "rowCnt=" + rowCnt + ", maxCnt=" + maxCnt) ;
                     if(rowCnt < maxCnt) {
                         try {
                             dbHandler = DBHandler.open(getApplicationContext());
                             File n = new File(fileList.get(rowCnt));
                             final String nn = n.getName();
                             String nn1 = nn.replaceAll(" ", "_");
-                            //Log.d(TAG, "fileName (" + rowCnt + "/" + maxCnt + ")");
+                            Log.d(TAG, "fileName (" + rowCnt + "/" + maxCnt + ")" + nn1 + ":" + dbHandler.getSendTy(fileList.get(rowCnt), nn1));
                             if (!"Y".equals(dbHandler.getSendTy(fileList.get(rowCnt), nn1)) && !"M".equals(dbHandler.getSendTy(fileList.get(rowCnt), nn1))) {
                                 try {
                                     if (!sendIng) { // 전송중이 아닐때만
@@ -213,12 +218,13 @@ public class MediaPostService extends Service {
                                     String nn1O = nnO.replaceAll(" ", "_");
                                     //Log.d(TAG, "fileName (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1O + ", maxCnt=" + maxCnt) ;
                                     if ("Y".equals(dbHandler.getSendTy(fileList.get(rowCnt), nn1O))) {
-                                        if (!"M".equals(dbHandler.getSendTy(fileList.get(rowCnt), nn1O))) {
-                                            if (putFTPSend(fileList.get(rowCnt), nn1O)) {
-                                                dbHandler.updatemFtpTy(fileList.get(rowCnt), nn1O, "M");
-                                                Log.d(TAG, "fileName FTP Send (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1O + ", maxCnt=" + maxCnt) ;
-                                            }
-                                        } // FTP 체크를 먼저 하고 다음으로
+                                        if (putFTPSend(fileList.get(rowCnt), nn1O)) {
+                                            dbHandler.updatemFtpTy(fileList.get(rowCnt), nn1O, "M");
+                                            Log.d(TAG, "fileName FTP Send (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1O + ", maxCnt=" + maxCnt) ;
+                                        }
+                                        rowCnt++;
+                                    } else if ("M".equals(dbHandler.getSendTy(fileList.get(rowCnt), nn1O))) {
+                                        // 이미 전송도 했다면 pass
                                         rowCnt++;
                                     } else {
                                         bTrue = false ;
@@ -236,7 +242,7 @@ public class MediaPostService extends Service {
                         fileList = getPathOfAllImages() ;
                     }
 
-                    Toast.makeText(getApplicationContext(), "진행중...(" + (rowCnt / maxCnt * 100)+ "%)",  Toast.LENGTH_LONG).show();
+                    //Toast.makeText(getApplicationContext(), "진행중...(" + rowCnt + "/" + maxCnt + ")",  Toast.LENGTH_SHORT).show();
 
                 } else {
                     Log.d(TAG, "onTick !!! WifiStatus=(" + getWIFIStatus() + "), Token=" + StringUtil.sToken) ;
@@ -250,6 +256,12 @@ public class MediaPostService extends Service {
                 Log.i(TAG,"onFinish");
             }
         };
+    }
+
+    double roundTwoDecimals(double d)
+    {
+        DecimalFormat twoDForm = new DecimalFormat("#.##");
+        return Double.valueOf(twoDForm.format(d));
     }
 
     public void setImagePost(String imgFileName, String fName) {
@@ -558,6 +570,8 @@ public class MediaPostService extends Service {
      */
     private ArrayList<String> getPathOfAllImages()
     {
+
+        Log.d(TAG, "getPathOfAllImages Start ------------------------------------------------------") ;
         ArrayList<String> result = new ArrayList<>();
         Uri uri = android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
         String[] projection = { MediaStore.MediaColumns.DATA, MediaStore.MediaColumns.DISPLAY_NAME };
@@ -581,7 +595,10 @@ public class MediaPostService extends Service {
             }
         }
 
+        if (cursor != null) cursor.close();
+
         int nCnt = 0  ;
+        dbHandler = DBHandler.open(getApplicationContext());
         for (String string : result)
         {
             //Log.i(TAG, "|" + string + "|");
@@ -589,11 +606,9 @@ public class MediaPostService extends Service {
             final String nn = n.getName() ;
             String nn1 = nn.replaceAll(" ", "_");
             try {
-
                 nCnt++ ;
                 // Log.d("DBHandler", "(" + maxCnt + "," + nCnt + ") path=" + string ) ;
                 try {
-                    dbHandler = DBHandler.open(getApplicationContext());
                     if (dbHandler.chkFileExist(string, nn1)) {
                         // 이미 등록된 파일은 전송을 했다고 봄
                         // dbHandler.updateSendTy(string, nn1, "N");
@@ -601,7 +616,6 @@ public class MediaPostService extends Service {
                             // posting / ftp 둘다 했으니까. 제외
                             maxCnt--;
                         }
-                        Log.i(TAG, "(" + maxCnt + ")") ;
                     } else {
                         Uri uri1 = Uri.fromFile(n);
                         InputStream in = getApplicationContext().getContentResolver().openInputStream(uri1);
@@ -618,17 +632,14 @@ public class MediaPostService extends Service {
                     }
                 } catch (Exception e) {
 
-                } finally {
-                    dbHandler.close();
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Some Error=" + e.toString()) ;
-            } finally {
-                if (dbHandler != null) dbHandler.close();
             }
         }
+        if (dbHandler != null) dbHandler.close();
 
-        Log.d(TAG, "getPathOfAllImages end") ;
+        Log.d(TAG, "getPathOfAllImages End  ------------------------------------------------------") ;
         return result;
     }
 
@@ -729,7 +740,7 @@ public class MediaPostService extends Service {
 
         }
         final String strDefaultDir = utilFTP.mDefaultBaseDirectory + strDate;
-        if (bFTPConnect && getWIFIStatus() && !"".equals(strDate)) {
+        if (bFTPConnect && getWIFIStatus()) {
             Thread sendFileftp = new Thread()
             {
                 public void run() {
@@ -757,7 +768,7 @@ public class MediaPostService extends Service {
                 Log.d(TAG, "Send Error=" + strfName);
             }
         } else {
-            Log.d(TAG, "WIFI 로 FTP 를 사용할 수 없음.") ;
+            Log.d(TAG, "WIFI 로 FTP 를 사용할 수 없음. bFTPConnect=" + bFTPConnect + " getWIFIStatus()=" + getWIFIStatus()) ;
             Toast.makeText(getApplicationContext(), "WIFI 로 FTP 를 사용할 수 없음.", Toast.LENGTH_LONG);
         }
         return bResult ;
