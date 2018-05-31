@@ -661,13 +661,25 @@ public class MainWordPress extends AppCompatActivity {
 
         permissioninfo = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_NETWORK_STATE);
         if(permissioninfo == PackageManager.PERMISSION_GRANTED){
-            Toast.makeText(this,"WIFI Status 얻기 권한 있음",Toast.LENGTH_SHORT).show();
+            Toast.makeText(this,"WIFI 사용 권한 있음",Toast.LENGTH_SHORT).show();
         }else{
             if(ActivityCompat.shouldShowRequestPermissionRationale(this,Manifest.permission.ACCESS_NETWORK_STATE)){
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_NETWORK_STATE},101);
 
             }else{
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_NETWORK_STATE},101);
+            }
+        }
+
+        permissioninfo = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_WIFI_STATE);
+        if(permissioninfo == PackageManager.PERMISSION_GRANTED){
+            Toast.makeText(this,"WIFI 상태 얻기 권한 있음",Toast.LENGTH_SHORT).show();
+        }else{
+            if(ActivityCompat.shouldShowRequestPermissionRationale(this,Manifest.permission.ACCESS_WIFI_STATE)){
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_WIFI_STATE},103);
+
+            }else{
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_WIFI_STATE},103);
             }
         }
 
@@ -694,8 +706,18 @@ public class MainWordPress extends AppCompatActivity {
             Toast.makeText(this, str, Toast.LENGTH_SHORT).show();
         } else if(requestCode == 101) {
             if(grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
-                str = "WIFI Status 얻기 권한 승인";
-            else str = "WIFI Status 얻기 권한 거부";
+                str = "WIFI 사용 얻기 권한 승인";
+            else str = "WIFI 사용 얻기 권한 거부";
+            Toast.makeText(this, str, Toast.LENGTH_SHORT).show();
+        } else if(requestCode == 102) {
+            if(grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                str = "PHONE Status 얻기 권한 승인";
+            else str = "PHONE Status 얻기 권한 거부";
+            Toast.makeText(this, str, Toast.LENGTH_SHORT).show();
+        } else if(requestCode == 103) {
+            if(grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                str = "WIFI 상태 얻기 권한 승인";
+            else str = "WIFI 상태 얻기 권한 거부";
             Toast.makeText(this, str, Toast.LENGTH_SHORT).show();
         }
     }

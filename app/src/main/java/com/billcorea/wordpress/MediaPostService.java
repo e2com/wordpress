@@ -12,6 +12,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.icu.text.DecimalFormat;
+import android.icu.text.SimpleDateFormat;
 import android.media.ExifInterface;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
@@ -47,6 +48,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -725,7 +727,11 @@ public class MediaPostService extends Service {
 
         boolean bResult = false ;
 
-        String strDate = "" ;
+        long now = System.currentTimeMillis() ;
+        Date date = new Date(now);
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy");
+        String baseYear = sdf.format(date);
+        String strDate = "0000" ;
 
         try {
             File n = new File(strPath) ;
@@ -739,9 +745,10 @@ public class MediaPostService extends Service {
             strDate = "/" + getDateArry[3]+getDateArry[4]+getDateArry[5]; // 경로 구분자 앞에 추가함.
             //Log.d(TAG, "날자구하기:" + getDate + ">>>" + strDate) ;
         } catch (Exception e) {
-
+            baseYear = "0000" ;
         }
-        final String strDefaultDir = utilFTP.mDefaultBaseDirectory + strDate;
+
+        final String strDefaultDir = utilFTP.mDefaultBaseDirectory + "/" + baseYear + strDate;
         if (bFTPConnect && getWIFIStatus()) {
             Thread sendFileftp = new Thread()
             {
