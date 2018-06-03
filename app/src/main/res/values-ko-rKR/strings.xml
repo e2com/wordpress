@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">블로그</string>
+    <string name="FTPSend">FTP초기화</string>
+    <string name="imgPost">그림등록</string>
+    <string name="backupData">백업하기</string>
+    <string name="help">도움말</string>
+    <string name="PostMedia">미디어등록</string>
+    <string name="PostText">내용등록</string>
+</resources>
