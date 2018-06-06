@@ -398,7 +398,7 @@ public class MainWordPress extends AppCompatActivity {
      * @param fName
      * @throws Exception
      */
-    public void setImagePost(String imgFileName, String fName) throws Exception {
+    public void setImagePost(String imgFileName, String fName) {
 
         final String imgName = fName ;
         File iFile = new File(imgFileName) ;
@@ -671,18 +671,6 @@ public class MainWordPress extends AppCompatActivity {
             }
         }
 
-        permissioninfo = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_WIFI_STATE);
-        if(permissioninfo == PackageManager.PERMISSION_GRANTED){
-            Toast.makeText(this,"WIFI 상태 얻기 권한 있음",Toast.LENGTH_SHORT).show();
-        }else{
-            if(ActivityCompat.shouldShowRequestPermissionRationale(this,Manifest.permission.ACCESS_WIFI_STATE)){
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_WIFI_STATE},103);
-
-            }else{
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_WIFI_STATE},103);
-            }
-        }
-
         permissioninfo = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE);
         if(permissioninfo == PackageManager.PERMISSION_GRANTED){
             Toast.makeText(this,"PHONE STATUS 얻기 권한 있음",Toast.LENGTH_SHORT).show();
@@ -692,6 +680,18 @@ public class MainWordPress extends AppCompatActivity {
 
             }else{
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_PHONE_STATE},102);
+            }
+        }
+
+        permissioninfo = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_WIFI_STATE);
+        if(permissioninfo == PackageManager.PERMISSION_GRANTED){
+            Toast.makeText(this,"WIFI 상태 얻기 권한 있음",Toast.LENGTH_SHORT).show();
+        }else{
+            if(ActivityCompat.shouldShowRequestPermissionRationale(this,Manifest.permission.ACCESS_WIFI_STATE)){
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_WIFI_STATE},103);
+
+            }else{
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_WIFI_STATE},103);
             }
         }
     }
