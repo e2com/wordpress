@@ -508,6 +508,13 @@ public class MediaPostService extends Service {
                 dbHandler.updatePostId(pFullPath, pFileName, pageName);
                 dbHandler.close();
                 Toast.makeText(getApplicationContext(), "Posting OK !!! ID=" + pageName, Toast.LENGTH_LONG).show();
+
+                if (putFTPSend(pFullPath, pFileName)) {
+                    dbHandler = DBHandler.open(getApplicationContext()) ;
+                    dbHandler.updatemFtpTy(pFullPath, pFileName, "M");
+                    dbHandler.close();
+                    Log.d(TAG, "fileName FTP Send (" + pageName + ")=" + pFullPath + ">>>>" + pFileName + ", maxCnt=" + maxCnt);
+                }
             }
         }, new Response.ErrorListener() {
             @Override
