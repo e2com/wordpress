@@ -7,4 +7,5 @@
     <string name="help">도움말</string>
     <string name="PostMedia">미디어등록</string>
     <string name="PostText">내용등록</string>
+    <string name="ViewCnt">건수조회</string>
 </resources>

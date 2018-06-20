@@ -129,6 +129,29 @@ public class DBHandler {
 		return cursor;
 	}
 
+	/**
+	 * 현재 까지 처리된 상태에 대한 결과를 받음
+	 * @return
+	 */
+	public String selectGetCnt()
+	{
+		String returnValue = "" ;
+		String sql = "select count(_id) as X1, sum(case when send_ty = 'M' then 1 else 0 end) as X2, sum(case when send_ty = 'Y' then 1 else 0 end) as X3 from UploadImageList" ;
+		Cursor cursor = db.rawQuery(sql, null);
+		cursor.moveToFirst();
+		returnValue = "총 건수=" + cursor.getInt(0) + ", FTP 완료 건수=" + cursor.getInt(1) + ", Post 완료 건수=" + cursor.getInt(2);
+		returnValue += ", 남은 건수=" + (cursor.getInt(0) - cursor.getInt(1) - cursor.getInt(2));
+		cursor.close();
+		Log.d(TAG, "selectGetCnt()=" + returnValue) ;
+		return returnValue;
+	}
+
+	/**
+	 * 파일 존재여부 확인
+	 * @param fullpath
+	 * @param filename
+	 * @return
+	 */
 	public boolean chkFileExist(String fullpath, String filename)
 	{
 		boolean returnValue = false ;
@@ -143,6 +166,12 @@ public class DBHandler {
 		return returnValue;
 	}
 
+	/**
+	 * 전송여부 취득
+	 * @param fullpath
+	 * @param filename
+	 * @return
+	 */
 	public String getSendTy(String fullpath, String filename){
 		String strResult = "" ;
 		String sql = "select send_ty from UploadImageList where fullpath = '" + fullpath + "' and filename = '" + filename + "'" ;

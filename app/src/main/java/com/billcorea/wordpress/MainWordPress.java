@@ -110,7 +110,7 @@ public class MainWordPress extends AppCompatActivity {
         mediaPostService = new MediaPostService();
         restartService = new RestartService();
 
-        sToken = getToken() ;
+        // sToken = getToken() ;
 
         // 죽지 않도록 등록 하기
         PackageManager pm = this.getPackageManager() ;
@@ -122,6 +122,7 @@ public class MainWordPress extends AppCompatActivity {
             intent = new Intent(MainWordPress.this, MediaPostService.class);
             startService(intent);
         }
+
         IntentFilter intentFilter = new IntentFilter("com.billcorea.wordpress.MediaPostService");
         registerReceiver(restartService, intentFilter);
 
@@ -131,12 +132,16 @@ public class MainWordPress extends AppCompatActivity {
         postList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+
+                getPostListView() ;
+/* 리스트는 조회하지 않고 건수만 조회함.
                 mapPost = (Map<String,Object>)list.get(position);
                 postID = ((Double)mapPost.get("id")).intValue();
 
                 Intent intent = new Intent(getApplicationContext(),Post.class);
                 intent.putExtra("id", ""+postID);
                 startActivity(intent);
+*/
             }
         });
 
@@ -180,9 +185,10 @@ public class MainWordPress extends AppCompatActivity {
         // Handle item selection
         switch (item.getItemId()) {
             case R.id.ftpSend:
-                dbHandler = DBHandler.open(getApplicationContext()) ;
+                getPostListView();
+                /*dbHandler = DBHandler.open(getApplicationContext()) ;
                 dbHandler.updateAllFTPReset();
-                dbHandler.close();
+                dbHandler.close();*/
                 return true;
             case R.id.postText:
                 Log.d(TAG, "Test Postion ...");
@@ -307,6 +313,18 @@ public class MainWordPress extends AppCompatActivity {
      */
     public void getPostListView() {
 
+        postTitle = new String[1] ;
+        dbHandler = DBHandler.open(getApplicationContext());
+        String strCnt = dbHandler.selectGetCnt() ;
+        postTitle[0] = strCnt ;
+        dbHandler.close();
+
+        Log.d(TAG, "getPostListView()=" + strCnt);
+
+        postList.setAdapter(new ArrayAdapter(MainWordPress.this,android.R.layout.simple_list_item_1,postTitle));
+        progressDialog.dismiss();
+
+/* 처음 화면에 목록 보여주는 것은 제거함
         final StringRequest request = new StringRequest(Request.Method.GET, StringUtil.getUrl(), new Response.Listener<String>() {
             @Override
             public void onResponse(String s) {
@@ -334,6 +352,7 @@ public class MainWordPress extends AppCompatActivity {
         request.setRetryPolicy(new DefaultRetryPolicy(300000, DefaultRetryPolicy.DEFAULT_MAX_RETRIES,  DefaultRetryPolicy.DEFAULT_BACKOFF_MULT));
         rQueue = Volley.newRequestQueue(MainWordPress.this);
         rQueue.add(request);
+*/
     }
 
     /**
