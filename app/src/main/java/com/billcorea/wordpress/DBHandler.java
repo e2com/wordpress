@@ -142,8 +142,70 @@ public class DBHandler {
 		returnValue = "총 건수=" + cursor.getInt(0) + ", FTP 완료 건수=" + cursor.getInt(1) + ", Post 완료 건수=" + cursor.getInt(2);
 		returnValue += ", 남은 건수=" + (cursor.getInt(0) - cursor.getInt(1) - cursor.getInt(2));
 		cursor.close();
-		Log.d(TAG, "selectGetCnt()=" + returnValue) ;
+		//Log.d(TAG, "selectGetCnt()=" + returnValue) ;
 		return returnValue;
+	}
+
+	/**
+	 * MediaPostServer 에서 전송중인 상황을 기록하기 위해서
+	 * @param rDate
+	 * @param iTot
+	 * @param iCnt
+	 * @return
+	 */
+	public long InsertSndCnt(String rDate, String iTot, String iCnt) {
+
+		ContentValues values = new ContentValues();
+		values.put("rDate", rDate) ;
+		values.put("totCnt",  iTot);
+		values.put("sndCnt",  iCnt);
+
+		long result = db.insert("SendStatus", null, values);
+
+		Log.d(TAG, "InsertSndCnt count=<" + result + ">" + rDate + "," + iTot + "," + iCnt) ;
+
+		return result;
+
+	}
+
+	/**
+	 * 일자별 전송 건수 update
+	 * @param rDate
+	 * @param iTot
+	 * @param iCnt
+	 * @return
+	 */
+	public long updateSndCnt(String rDate, String iTot, String iCnt) {
+
+		ContentValues values = new ContentValues();
+		values.put("totCnt",  iTot);
+		values.put("sndCnt",  iCnt);
+
+		long result = db.update("SendStatus", values, "rDate = '" + rDate + "'", null);
+
+		Log.d(TAG, "updateSndCnt count=<" + result + ">" + rDate + "," + iTot + "," + iCnt) ;
+
+		return result;
+
+	}
+
+	/**
+	 * 전송중인 상태에 대해서 건수 조회 해 주기
+	 * @param rDate : 조회 기준 일자
+	 * @return
+	 */
+	public String selectSndCnt(String rDate) {
+		String result = "" ;
+
+		String sql = "select rDate, totCnt, sndCnt from SendStatus where rDate = '" + rDate + "'";
+		Cursor cursor = db.rawQuery(sql, null);
+		cursor.moveToFirst();
+		if(cursor.moveToNext()){
+			result =  "처리중 " + cursor.getString(2) + "/" + cursor.getString(1) ;
+		}
+		cursor.close();
+
+		return result ;
 	}
 
 	/**

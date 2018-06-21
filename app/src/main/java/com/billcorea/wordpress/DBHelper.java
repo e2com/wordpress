@@ -6,7 +6,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 
 public class DBHelper extends SQLiteOpenHelper{
 	private static final String DB_NAME = "MY_WORDPRESS" ;
-	private static final int DB_Ver = 1 ;
+	private static final int DB_Ver = 2 ; // 2018.6.20 테이블 추가
 	public DBHelper(Context context) {
 		super(context, DB_NAME, null, DB_Ver);
 	}
@@ -30,10 +30,27 @@ public class DBHelper extends SQLiteOpenHelper{
 		db.execSQL(sql) ;
 	}
 
+	/**
+	 * 2018.6.20 테이블 추가 : Version 2 : MediaPostService 에서 전송중인 상태를 표시 하기 위해서
+	 * @param db
+	 * @param oldVersion
+	 * @param newVersion
+	 */
 	@Override 
 	public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+		/* 삭제하면 안됨.
 		db.execSQL("drop table if exists UploadImageList") ;
-		onCreate(db) ;
+		onCreate(db) ;*/
+		if ( newVersion == 2) {
+            String sql = "create table SendStatus (" +
+					"_id integer primary key autoincrement, " +
+					"rDate text," +
+					"totCnt text," +
+					"sndCnt text" +
+					")";
+			db.execSQL(sql) ;
+		}
+
 	}
 	
 }

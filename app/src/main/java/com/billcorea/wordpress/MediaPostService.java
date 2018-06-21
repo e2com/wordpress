@@ -48,6 +48,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -58,7 +59,7 @@ public class MediaPostService extends Service {
     String TAG = "MediaPostService" ;
     File file = null ;
 
-    private static final int MILLISINFUTURE = 60 * 60 * 1000;  // 60 분 : 1시간
+    private static final int MILLISINFUTURE = 8 * 60 * 60 * 1000;  // 60 분 : 1시간 * 8 = 8 시간
     private static final int COUNT_DOWN_INTERVAL = 3000;  // loop 재실행 시간 3초에 1회
     private static final int SEND_IMAGE_INTERVAL = 500000; // image upload 대기시간 500초 까지 대기
 
@@ -75,6 +76,7 @@ public class MediaPostService extends Service {
     RequestQueue rQueue ;
 
     DBHandler dbHandler = null ;
+    String strToday = "" ;
 
     public MediaPostService() {
     }
@@ -184,6 +186,8 @@ public class MediaPostService extends Service {
                     }).start();
                 }
 
+                strToday = getToday() ; // 처리할 때 마다 날자를 구함.
+
                 if (getWIFIStatus() && StringUtil.sToken != null) {
                     if (maxCnt < 1) {
                         fileList = getPathOfAllImages() ;
@@ -192,6 +196,7 @@ public class MediaPostService extends Service {
                     if(rowCnt < maxCnt) {
                         try {
                             dbHandler = DBHandler.open(getApplicationContext());
+                            String xStr = dbHandler.selectSndCnt(strToday);
                             File n = new File(fileList.get(rowCnt));
                             final String nn = n.getName();
                             String nn1 = nn.replaceAll(" ", "_");
@@ -201,6 +206,11 @@ public class MediaPostService extends Service {
                                     if (!sendIng) { // 전송중이 아닐때만
                                         setImagePost(fileList.get(rowCnt), nn1);
                                         Log.d(TAG, "fileName Post Ok! (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1 + ", maxCnt=" + maxCnt);
+                                        if (xStr.indexOf("처리중") < 0) {
+                                            dbHandler.InsertSndCnt(strToday, String.valueOf(maxCnt), String.valueOf(rowCnt));
+                                        } else {
+                                            dbHandler.updateSndCnt(strToday, String.valueOf(maxCnt), String.valueOf(rowCnt));
+                                        }
                                     }
                                 } catch (Exception e) {
 
@@ -210,6 +220,11 @@ public class MediaPostService extends Service {
                                     if (putFTPSend(fileList.get(rowCnt), nn1)) {
                                         dbHandler.updatemFtpTy(fileList.get(rowCnt), nn1, "M");
                                         Log.d(TAG, "fileName FTP Send (" + rowCnt + ")=" + fileList.get(rowCnt) + ">>>>" + nn1 + ", maxCnt=" + maxCnt);
+                                        if (xStr.indexOf("처리중") < 0) {
+                                            dbHandler.InsertSndCnt(strToday, String.valueOf(maxCnt), String.valueOf(rowCnt));
+                                        } else {
+                                            dbHandler.updateSndCnt(strToday, String.valueOf(maxCnt), String.valueOf(rowCnt));
+                                        }
                                     }
                                 } // FTP 체크를 먼저 하고 다음으로
                                 rowCnt++; // 전송한 파일 이면 다음으로 넘어가게 하기 위해서.
@@ -896,4 +911,18 @@ public class MediaPostService extends Service {
 
     }
         //출처: http://iw90.tistory.com/155 [woong's]
+
+    /**
+     * 오늘 날자을 구해서 년월일 형식으로 돌려줌.
+     * @return yyyyMMdd (오늘날자)
+     */
+    public String getToday() {
+        String result = "" ;
+
+        Calendar c = Calendar.getInstance();
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
+        result = sdf.format(c.getTime());
+
+        return result ;
+    }
 }

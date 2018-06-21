@@ -184,7 +184,7 @@ public class MainWordPress extends AppCompatActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         // Handle item selection
         switch (item.getItemId()) {
-            case R.id.ftpSend:
+            case R.id.viewCnt:
                 getPostListView();
                 /*dbHandler = DBHandler.open(getApplicationContext()) ;
                 dbHandler.updateAllFTPReset();
@@ -313,10 +313,11 @@ public class MainWordPress extends AppCompatActivity {
      */
     public void getPostListView() {
 
-        postTitle = new String[1] ;
+        postTitle = new String[2] ;
         dbHandler = DBHandler.open(getApplicationContext());
         String strCnt = dbHandler.selectGetCnt() ;
         postTitle[0] = strCnt ;
+        postTitle[1] = dbHandler.selectSndCnt(getToday()) ;
         dbHandler.close();
 
         Log.d(TAG, "getPostListView()=" + strCnt);
@@ -353,6 +354,20 @@ public class MainWordPress extends AppCompatActivity {
         rQueue = Volley.newRequestQueue(MainWordPress.this);
         rQueue.add(request);
 */
+    }
+
+    /**
+     * 오늘 날자을 구해서 년월일 형식으로 돌려줌.
+     * @return yyyyMMdd (오늘날자)
+     */
+    public String getToday() {
+        String result = "" ;
+
+        Calendar c = Calendar.getInstance();
+        android.icu.text.SimpleDateFormat sdf = new android.icu.text.SimpleDateFormat("yyyyMMdd");
+        result = sdf.format(c.getTime());
+
+        return result ;
     }
 
     /**
